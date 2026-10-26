@@ -296,8 +296,22 @@ def process_event(event_url, judge_name, base_url):
     return stats
 
 
-def get_event_links(comp_url):
-    """Return (base_url, list of event URLs) for a competition index page."""
+def get_competition_name(soup):
+    """
+    Best-effort competition title from the index page: the first heading
+    (h1-h3), falling back to the page <title>. Returns None if nothing is found.
+    """
+    for tag in soup.find_all(["h1", "h2", "h3"]):
+        text = " ".join(tag.get_text(" ", strip=True).split())
+        if text:
+            return text
+    if soup.title and soup.title.get_text(strip=True):
+        return " ".join(soup.title.get_text(" ", strip=True).split())
+    return None
+
+
+def get_competition(comp_url):
+    """Return (competition name, base_url, list of event URLs) for a competition index page."""
     base_url = comp_url.replace("index.asp", "")
 
     response = requests.get(comp_url, timeout=REQUEST_TIMEOUT)
@@ -311,6 +325,12 @@ def get_event_links(comp_url):
     for link in comp_table.find_all("a", href=True):
         event_links.append(base_url + link["href"])
 
+    return get_competition_name(soup), base_url, event_links
+
+
+def get_event_links(comp_url):
+    """Return (base_url, list of event URLs) for a competition index page."""
+    _, base_url, event_links = get_competition(comp_url)
     return base_url, event_links
 
 
