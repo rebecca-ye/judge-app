@@ -37,8 +37,8 @@ COLUMNS = [
     "Skater", "Number of Skaters", "Number of Judges", "# of GOEs", "Total # GOEs",
     "# of GOEs w/in Range", "# of GOEs w/in Range +/- 1", "GOE % w/in Range",
     "GOE % w/in Range +/- 1", "Panel Component Range", "Composition", "Presentation",
-    "Skating Skills", "TJ Component Range", "TJ Composition", "TJ Presentation",
-    "TJ Skating Skills", "# of Components", "Total # Components", "# Components w/in Range",
+    "Skating Skills", "My Component Range", "My Composition", "My Presentation",
+    "My Skating Skills", "# of Components", "Total # Components", "# Components w/in Range",
     "# of Components w/in Range +/- .25", "Component % w/in Range",
     "Component % w/in Range +/- .25"
 ]
@@ -128,7 +128,8 @@ def compute_skater_stats(df, judge_col, num_judges):
     min_comp = raw_comp.loc[:, raw_comp.columns != judge_col].min(axis=1).astype(float)
     max_comp = raw_comp.loc[:, raw_comp.columns != judge_col].max(axis=1).astype(float)
 
-    num_goes = len(raw_scores) - 3
+    # Only count elements that received marks (rows set to NaN above are excluded)
+    num_goes = int(raw_goes[judge_col].notna().sum())
     total_goes = num_judges * num_goes
     total_components = num_judges * 3
 
@@ -154,8 +155,8 @@ def compute_skater_stats(df, judge_col, num_judges):
         "Total # GOEs": [total_goes],
         "# of GOEs w/in Range": [goes_in_range],
         "# of GOEs w/in Range +/- 1": [goes_in_range_pm1],
-        "GOE % w/in Range": [str(round(goes_in_range / num_goes * 100)) + "%"],
-        "GOE % w/in Range +/- 1": [str(round(goes_in_range_pm1 / num_goes * 100)) + "%"],
+        "GOE % w/in Range": [str(round(goes_in_range / num_goes * 100)) + "%" if num_goes else "n/a"],
+        "GOE % w/in Range +/- 1": [str(round(goes_in_range_pm1 / num_goes * 100)) + "%" if num_goes else "n/a"],
         "Panel Component Range": [None],
         "Composition": [str(min_comp.iloc[0]) + " - " + str(max_comp.iloc[0])],
         "Presentation": [str(min_comp.iloc[1]) + " - " + str(max_comp.iloc[1])],
@@ -175,11 +176,38 @@ def compute_skater_stats(df, judge_col, num_judges):
     return stats
 
 
+def element_detail(df, judge_col, num_judges):
+    """
+    One row per GOE element for one skater: element name, the rest of the
+    panel's min/max GOE (excluding this judge), and this judge's GOE.
+    Uses the same row selection as compute_skater_stats.
+    """
+    score_cols = [f"J{i}" for i in range(1, num_judges + 1)]
+    kept = df.loc[:, score_cols].dropna()
+    elem_col = next((c for c in df.columns if "element" in str(c).lower()), None)
+
+    goes = kept.iloc[:-3, :].replace("\u2013", "-")
+    rows = []
+    for n, (row_idx, row) in enumerate(goes.iterrows(), start=1):
+        if row["J1"] == "-":  # element with no marks (same rule as compute_skater_stats)
+            continue
+        vals = row.astype(float)
+        others = vals.drop(judge_col)
+        rows.append({
+            "#": n,
+            "Element": str(df.loc[row_idx, elem_col]) if elem_col is not None else f"Element {n}",
+            "Panel min": others.min(),
+            "Panel max": others.max(),
+            "My GOE": vals[judge_col],
+        })
+    return pd.DataFrame(rows)
+
+
 def process_event(event_url, judge_name, base_url):
     """
     Process a single event if the judge is on the panel.
     The number of skater tables that could not be parsed is stored in
-    stats.attrs["skipped"].
+    stats.attrs["skipped"], and per-element GOE detail in stats.attrs["elements"].
     """
     response = requests.get(event_url, timeout=REQUEST_TIMEOUT)
     soup_event = BeautifulSoup(response.text, "lxml")
@@ -204,11 +232,18 @@ def process_event(event_url, judge_name, base_url):
 
     stats_list = []
     kept_names = []
+    element_list = []
     skipped = 0
     for idx, skater_df in enumerate(skater_tables):
         try:
             stats_list.append(compute_skater_stats(skater_df, judge_col, num_judges))
             kept_names.append(skater_names[idx] if idx < len(skater_names) else f"Skater {idx + 1}")
+            try:
+                elements = element_detail(skater_df, judge_col, num_judges)
+                elements.insert(0, "Skater", kept_names[-1])
+                element_list.append(elements)
+            except Exception:
+                pass  # element chart is optional; don't drop the skater's stats
         except Exception:
             # Skip malformed skater tables rather than failing entire event
             skipped += 1
@@ -255,6 +290,9 @@ def process_event(event_url, judge_name, base_url):
 
     stats = pd.concat([header, stats], ignore_index=True)
     stats.attrs["skipped"] = skipped
+    stats.attrs["elements"] = (
+        pd.concat(element_list, ignore_index=True).to_dict("records") if element_list else []
+    )
     return stats
 
 
