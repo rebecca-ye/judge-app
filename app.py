@@ -13,6 +13,10 @@ import streamlit as st
 
 import analysis
 
+# Works on older Streamlit (e.g. Anaconda's) and newer releases alike.
+_ST_VER = tuple(int(x) for x in st.__version__.split(".")[:2])
+STRETCH = {"width": "stretch"} if _ST_VER >= (1, 50) else {"use_container_width": True}
+
 st.set_page_config(page_title="Judge Range Analysis", page_icon="⛸️", layout="wide",
                    initial_sidebar_state="collapsed")
 
@@ -142,13 +146,16 @@ st.markdown(
 )
 
 with st.form("inputs"):
-    c_url, c_name, c_btn = st.columns([3, 1.4, 1], vertical_alignment="bottom")
+    try:
+        c_url, c_name, c_btn = st.columns([3, 1.4, 1], vertical_alignment="bottom")
+    except TypeError:  # very old Streamlit
+        c_url, c_name, c_btn = st.columns([3, 1.4, 1])
     comp_url = c_url.text_input(
         "Competition results URL",
         placeholder="https://ijs.usfigureskating.org/leaderboard/results/2025/36167/index.asp",
     )
     judge_name = c_name.text_input("Official's full name", placeholder="Rebecca Ye")
-    submitted = c_btn.form_submit_button("Run analysis", type="primary", width="stretch")
+    submitted = c_btn.form_submit_button("Run analysis", type="primary", **STRETCH)
 
 if submitted:
     if not comp_url.strip() or not judge_name.strip():
@@ -224,11 +231,11 @@ def legend(items):
 with tab_overview:
     legend([("Exact panel range", ICE, "2px"), ("With tolerance (GOE ±1, components ±0.25)", ICE_LIGHT, "2px")])
     c1, c2 = st.columns([1.35, 1])
-    c1.altair_chart(range_bars("GOEs", "GOE % in range", "GOE % ±1", True), width="stretch")
-    c2.altair_chart(range_bars("Components", "Comp % in range", "Comp % ±0.25", False), width="stretch")
+    c1.altair_chart(range_bars("GOEs", "GOE % in range", "GOE % ±1", True), **STRETCH)
+    c2.altair_chart(range_bars("Components", "Comp % in range", "Comp % ±0.25", False), **STRETCH)
 
     st.dataframe(
-        summary, hide_index=True, width="stretch",
+        summary, hide_index=True, **STRETCH,
         column_config={
             c: st.column_config.ProgressColumn(c, format="%.1f%%", min_value=0, max_value=100)
             for c in ["GOE % in range", "GOE % ±1", "Comp % in range", "Comp % ±0.25"]
@@ -262,7 +269,7 @@ with tab_events:
             tooltip=["Skater", "Judge", "Panel min", "Panel max"],
         )
         cols[i].altair_chart(
-            (ranges + marks).properties(height=alt.Step(34)), width="stretch"
+            (ranges + marks).properties(height=alt.Step(34)), **STRETCH
         )
 
     st.markdown("**Skater detail**")
@@ -272,7 +279,7 @@ with tab_events:
                 "Composition", "TJ Composition", "Presentation", "TJ Presentation",
                 "Skating Skills", "TJ Skating Skills", "Component % w/in Range",
                 "Component % w/in Range +/- .25"]],
-        hide_index=True, width="stretch",
+        hide_index=True, **STRETCH,
     )
 
 st.divider()
