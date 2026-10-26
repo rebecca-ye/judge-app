@@ -1,0 +1,192 @@
+--- judge-app/original.py	2026-10-26 12:04:05.505736467 -0400
++++ judge-app/analysis.py	2026-10-26 12:04:40.983146132 -0400
+@@ -13,6 +13,8 @@
+ 4. Computes how often the judge's GOEs/components fall within the panel range
+ 5. Exports event-level and skater-level results to CSV
+ 
++Can be run directly (python analysis.py) or imported by app.py (Streamlit UI).
++
+ Sample test:
+ Competition URL:
+ https://ijs.usfigureskating.org/leaderboard/results/2025/36167/index.asp
+@@ -22,23 +24,33 @@
+ """
+ 
+ import re
++from io import StringIO
++
+ import requests
+ import numpy as np
+ import pandas as pd
+ from bs4 import BeautifulSoup
+ 
++REQUEST_TIMEOUT = 30  # seconds
++
++COLUMNS = [
++    "Skater", "Number of Skaters", "Number of Judges", "# of GOEs", "Total # GOEs",
++    "# of GOEs w/in Range", "# of GOEs w/in Range +/- 1", "GOE % w/in Range",
++    "GOE % w/in Range +/- 1", "Panel Component Range", "Composition", "Presentation",
++    "Skating Skills", "TJ Component Range", "TJ Composition", "TJ Presentation",
++    "TJ Skating Skills", "# of Components", "Total # Components", "# Components w/in Range",
++    "# of Components w/in Range +/- .25", "Component % w/in Range",
++    "Component % w/in Range +/- .25"
++]
++
+ 
+ def find_officials_table(soup_event):
+-    """Find the officials table for an event page."""
+-    possible_classes = ["officials ladies", 
+-                        "officials men", 
+-                        "officials pairs", 
+-                        "officials team"]
+-
+-    for table_class in possible_classes:
+-        tables = soup_event.find_all("table", {"class": table_class})
+-        if tables:
+-            return BeautifulSoup(str(tables), "html.parser")
++    """Find the officials table for an event page (any class starting with 'officials')."""
++    tables = soup_event.find_all(
++        "table", class_=lambda c: c is not None and "officials" in c
++    )
++    if tables:
++        return BeautifulSoup(str(tables), "html.parser")
+ 
+     return None
+ 
+@@ -89,7 +101,7 @@
+         return None
+ 
+     detail_url = base_url + link["href"]
+-    response = requests.get(detail_url)
++    response = requests.get(detail_url, timeout=REQUEST_TIMEOUT)
+     return BeautifulSoup(response.text, "lxml")
+ 
+ 
+@@ -103,7 +115,7 @@
+     raw_scores = df.loc[:, score_cols].dropna().reset_index(drop=True)
+ 
+     # GOEs are all rows except the final 3 component rows
+-    raw_goes = raw_scores.iloc[:-3, :].replace("\u2013", "-")
++    raw_goes = raw_scores.iloc[:-3, :].replace("–", "-")
+     raw_goes.loc[raw_goes["J1"] == "-"] = np.nan
+     raw_goes = raw_goes.astype(float)
+ 
+@@ -164,8 +176,12 @@
+ 
+ 
+ def process_event(event_url, judge_name, base_url):
+-    """Process a single event if the judge is on the panel."""
+-    response = requests.get(event_url)
++    """
++    Process a single event if the judge is on the panel.
++    The number of skater tables that could not be parsed is stored in
++    stats.attrs["skipped"].
++    """
++    response = requests.get(event_url, timeout=REQUEST_TIMEOUT)
+     soup_event = BeautifulSoup(response.text, "lxml")
+ 
+     found, judge_col, num_judges = get_judge_info(soup_event, judge_name)
+@@ -181,17 +197,21 @@
+ 
+     skater_name_tables = soup_detail.find_all("table", {"class": "sum"})
+     skater_names = []
+-    for table in pd.read_html(str(skater_name_tables)):
++    for table in pd.read_html(StringIO(str(skater_name_tables))):
+         skater_names.append(table.iloc[0, 1].split(", ")[0])
+ 
+-    skater_tables = pd.read_html(str(soup_detail.find_all("table", {"class": "elm"})))
++    skater_tables = pd.read_html(StringIO(str(soup_detail.find_all("table", {"class": "elm"}))))
+ 
+     stats_list = []
+-    for skater_df in skater_tables:
++    kept_names = []
++    skipped = 0
++    for idx, skater_df in enumerate(skater_tables):
+         try:
+             stats_list.append(compute_skater_stats(skater_df, judge_col, num_judges))
++            kept_names.append(skater_names[idx] if idx < len(skater_names) else f"Skater {idx + 1}")
+         except Exception:
+             # Skip malformed skater tables rather than failing entire event
++            skipped += 1
+             continue
+ 
+     if not stats_list:
+@@ -199,7 +219,7 @@
+ 
+     stats = pd.concat(stats_list, ignore_index=True)
+     stats.insert(0, "Number of Skaters", None)
+-    stats.insert(0, "Skater", skater_names[:len(stats)])
++    stats.insert(0, "Skater", kept_names)
+ 
+     summary = pd.DataFrame({
+         "Skater": ["Event Totals"],
+@@ -234,16 +254,15 @@
+     header.loc[0, "Number of Skaters"] = len(stats) - 1
+ 
+     stats = pd.concat([header, stats], ignore_index=True)
++    stats.attrs["skipped"] = skipped
+     return stats
+ 
+ 
+-def main():
+-    comp_url = input("Enter competition results URL: ").strip()
+-    judge_name = input("Enter official's full name: ").strip()
+-
++def get_event_links(comp_url):
++    """Return (base_url, list of event URLs) for a competition index page."""
+     base_url = comp_url.replace("index.asp", "")
+ 
+-    response = requests.get(comp_url)
++    response = requests.get(comp_url, timeout=REQUEST_TIMEOUT)
+     soup = BeautifulSoup(response.text, "lxml")
+ 
+     comp_table = soup.find("table", {"id": "daySort"})
+@@ -254,26 +273,35 @@
+     for link in comp_table.find_all("a", href=True):
+         event_links.append(base_url + link["href"])
+ 
+-    final = pd.DataFrame(columns=[
+-        "Skater", "Number of Skaters", "Number of Judges", "# of GOEs", "Total # GOEs",
+-        "# of GOEs w/in Range", "# of GOEs w/in Range +/- 1", "GOE % w/in Range",
+-        "GOE % w/in Range +/- 1", "Panel Component Range", "Composition", "Presentation",
+-        "Skating Skills", "TJ Component Range", "TJ Composition", "TJ Presentation",
+-        "TJ Skating Skills", "# of Components", "Total # Components", "# Components w/in Range",
+-        "# of Components w/in Range +/- .25", "Component % w/in Range",
+-        "Component % w/in Range +/- .25"
+-    ])
++    return base_url, event_links
++
++
++def combine_results(event_results):
++    """Stack per-event tables into one frame with blank spacer rows (the CSV layout)."""
++    final = pd.DataFrame(columns=COLUMNS)
++    for event_stats in event_results:
++        spacer = pd.DataFrame([{col: None for col in final.columns}])
++        final = pd.concat([final, event_stats, spacer], ignore_index=True)
++    return final
++
++
++def main():
++    comp_url = input("Enter competition results URL: ").strip()
++    judge_name = input("Enter official's full name: ").strip()
++
++    base_url, event_links = get_event_links(comp_url)
+ 
++    event_results = []
+     for event_url in event_links:
+         event_stats = process_event(event_url, judge_name, base_url)
+         if event_stats is not None:
+             print(event_stats)
+-            spacer = pd.DataFrame([{col: None for col in final.columns}])
+-            final = pd.concat([final, event_stats, spacer], ignore_index=True)
++            event_results.append(event_stats)
+ 
++    final = combine_results(event_results)
+     final.to_csv("judge_range_analysis.csv", index=False)
+     print("\nDone. Results saved to judge_range_analysis.csv")
+ 
+ 
+ if __name__ == "__main__":
+-    main()
+\ No newline at end of file
++    main()
