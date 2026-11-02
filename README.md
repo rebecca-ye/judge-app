@@ -1,9 +1,9 @@
 # Judge Range Analysis
 
-As a US Figure Skating judge, I wanted a clear way to check how consistent
-my marks are with the rest of the panel. This app pulls a competition's
-public score sheets and measures how often my scores fall within the range
-set by the other judges.
+I wanted to build an easy way for US Figure Skating Judges to check how consistent
+their marks are with the rest of the panel. This app pulls a competition's
+public score sheets and measures how often a specified judge's scores fall within the range
+across the other judges.
 
 ## What it measures
 
