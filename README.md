@@ -1,6 +1,6 @@
 # Judge Range Analysis
 
-I wanted to build an easy way for US Figure Skating Judges to check how consistent
+The goal is to provide an easy way for US Figure Skating judges to check how consistent
 their marks are with the rest of the panel. This app pulls a competition's
 public score sheets and measures how often a specified judge's scores fall within the range
 across the other judges.
