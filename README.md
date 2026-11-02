@@ -1,38 +1,47 @@
-# Judge Range Analysis (Streamlit)
+# Judge Range Analysis
 
-```
-analysis.py                    # your original script, lightly refactored (still runs on its own)
-app.py                         # the Streamlit UI
-requirements.txt
-.streamlit/config.toml         # theme
-.streamlit/secrets.toml.example
-```
+As a US Figure Skating judge, I wanted a clear way to check how consistent
+my marks are with the rest of the panel. This app pulls a competition's
+public score sheets and measures how often my scores fall within the range
+set by the other judges.
 
-## Run locally
+## What it measures
+
+For every skater I judged at a competition:
+
+- **Grades of Execution (GOEs):** the share of my element marks that fall
+  within the other judges' lowest-to-highest range, and within that range
+  ±1.
+- **Program components** (Composition, Presentation, Skating Skills): the
+  share of my marks within the other judges' range, and within ±0.25.
+
+Results are shown by event and by skater, with charts showing where each of
+my marks sits relative to the panel.
+
+## How it works
+
+1. Enter a competition results URL and a judge's name.
+2. The app finds each event where that judge served, reads the judges'
+   detail sheets, and compares the judge's marks with the rest of the panel.
+3. Results can be saved and reopened later.
+
+## Run it
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The old command-line version still works: `python analysis.py`.
+The analysis can also be run without the interface: `python analysis.py`.
 
-## Private access
+To require a password, copy `.streamlit/secrets.toml.example` to
+`.streamlit/secrets.toml` and set `APP_PASSWORD`.
 
-- **Password:** copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and set `APP_PASSWORD`. If no password is set, the app opens without one, which is handy locally.
-- **Streamlit Community Cloud:** push the folder to a GitHub repo, deploy it, paste `APP_PASSWORD = "..."` into the app's **Secrets** settings, and set the app to private with an invite list under **Sharing**. You can use both together.
+## Files
 
-## Changes to `judge_panel_analysis.py` (now `analysis.py`)
+- `analysis.py`: scrapes the score sheets and calculates the statistics
+- `app.py`: the Streamlit interface and charts
 
-The scoring logic in `compute_skater_stats` is unchanged.
+## Author
 
-1. **`find_officials_table`**: matches any table whose class contains `officials` instead of the four hard-coded classes (`officials ladies/men/pairs/team`). New class names such as `officials women` are no longer silently skipped.
-2. **`pd.read_html(...)` (two calls in `process_event`)**: the HTML is wrapped in `StringIO(...)`. Newer pandas no longer accepts a raw HTML string. Adds `from io import StringIO`.
-3. **`requests.get(...)` (three calls)**: added `timeout=30` (`REQUEST_TIMEOUT`) so a stalled page can't hang the app.
-4. **Skater name alignment bug in `process_event`**: names used to be assigned with `skater_names[:len(stats)]`. If a skater in the middle was skipped, every later skater got the previous skater's name. Names are now collected inside the loop alongside each successful stats row.
-5. **Skipped-skater count**: `process_event` counts skipped score sheets and stores the number in `stats.attrs["skipped"]`, so the UI can warn about it. The return value is otherwise the same.
-6. **`main()` split into reusable pieces**:
-   - `get_event_links(comp_url)` returns `(base_url, event_links)`. This is the old first half of `main`.
-   - `combine_results(event_results)` builds the final stacked table with spacer rows, which is the old CSV layout.
-   - `COLUMNS` is the column list that used to be defined inline in `main`.
-   - `main()` now calls these functions and still prints each event and writes `judge_range_analysis.csv`.
+Rebecca Ye
