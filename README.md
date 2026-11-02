@@ -7,16 +7,16 @@ across the other judges.
 
 ## What it measures
 
-For every skater I judged at a competition:
+For every skater the specified judge (call them J) judged at a competition:
 
-- **Grades of Execution (GOEs):** the share of my element marks that fall
+- **Grades of Execution (GOEs):** the share of J's element marks that fall
   within the other judges' lowest-to-highest range, and within that range
   ±1.
 - **Program components** (Composition, Presentation, Skating Skills): the
-  share of my marks within the other judges' range, and within ±0.25.
+  share of J's marks within the other judges' range, and within ±0.25.
 
 Results are shown by event and by skater, with charts showing where each of
-my marks sits relative to the panel.
+J's marks sits relative to the panel.
 
 ## How it works
 
