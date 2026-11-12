@@ -5,7 +5,8 @@ their marks are with the rest of the panel. This app pulls a competition's
 public score sheets and measures how often a specified judge's scores fall within the range
 across the other judges.
 
-<img width="814" height="904" alt=" alt="Judge range analysis overview showing marks relative to the panel's range" src="https://github.com/user-attachments/assets/0fe4086b-089e-4c4e-9824-f9f41f6580d0" />
+![Judge range analysis overview](screenshot1%20judge-range-analysis.png)
+![Judge range analysis detail](screenshot2%20judge-range-analysis.png)
 
 ## What it measures
 
