@@ -6,10 +6,11 @@ public score sheets and measures how often a specified judge's scores fall withi
 across the other judges.
 
 <p align="center">
-<img src="screenshot1%20judge-range-analysis.png" width="1000" alt="Judge range analysis overview">
+<img src="screenshot1%20judge-range-analysis.png?v=2" width="700" alt="Judge range analysis overview">
 </p>
+
 <p align="center">
-<img src="screenshot2%20judge-range-analysis.png" width="1000" alt="Judge range analysis detail">
+<img src="screenshot2%20judge-range-analysis.png?v=2" width="700" alt="Judge range analysis detail">
 </p>
 
 ## What it measures
